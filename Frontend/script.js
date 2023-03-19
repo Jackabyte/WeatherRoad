@@ -26,12 +26,6 @@
       const locationButton = document.createElement("button");
       locationButton.textContent = "Pan to Current Location";
 
-      //What does this do even???? Delete if Unneccesary!!!
-      //locationButton.classList.add("custom-map-control-button");
-
-      //set's the location for the map button.
-      map.controls[google.maps.ControlPosition.TOP_CENTER].push(locationButton);
-
       //When button is pushed execute the following code, which get's the current cordinates
       locationButton.addEventListener("click", () => {
         //Check if geolocation is possible on user's browser
@@ -64,7 +58,6 @@
           handleLocationError(false, infoWindow, map.getCenter());
         }
       });
-
       new AutocompleteDirectionsHandler(map);
     },
     () => {
@@ -79,19 +72,32 @@
     }
 
 //Function to get the weather data of your current location
-function getWeatherData(map, locID){
+function getWeatherData(map, locID, legDestDuration){
         
   const API_KEY = '21917a0e0803572232357c75d94699c0';
 
         let lat = locID.location.lat();
         let lng = locID.location.lng();
 
-      fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lng}&appid=${API_KEY}&units=metric`)
+      fetch(`https://pro.openweathermap.org/data/2.5/forecast/hourly?lat=${lat}&lon=${lng}&appid=${API_KEY}&units=metric`)
+      
     .then(res => res.json())
     .then(data => {
-      console.log(data)
-      let window = showWeatherData(data,locID);
+      let minDifference = [];
+        for(let i = 0; i < data.list.length; i++){
+          minDifference.push(data.list[i].dt - legDestDuration);
+        }  
+
+        const goal = 0;
+        const closest = minDifference.reduce(function(prev, curr) {
+          return (Math.abs(curr - goal) < Math.abs(prev - goal) ? curr : prev);
+        });
+         
+        const minIndex = minDifference.indexOf(closest);
+      
+      let window = showWeatherData(data.list[minIndex],locID);
       window.open(map);
+      
     })
     .catch(err => console.log('err', err))
   
@@ -101,6 +107,7 @@ function showWeatherData(data,locID){
     let WeatherInfo = data.weather[0];
     let weatherTemp = data.main.temp;
     let weatherWind = data.wind.speed;
+    let destinationTime = data.dt_txt;
 
     //The Weather data of the current location including the description, temperture and windspeed.
     const weatherData = 
@@ -109,7 +116,7 @@ function showWeatherData(data,locID){
     '</div>' +
     
     "<div style='float:right; padding: 10px;'>" +
-    `<b>Current Weather</b><br/>${WeatherInfo.description}<br/><br/>Current Temperture: ${weatherTemp}<br/><br/>Wind Speed: ${weatherWind}<br/></div>`
+    `<b>Current Weather</b><br/>${WeatherInfo.description}<br/><br/>Current Temperture: ${weatherTemp}<br/><br/>Wind Speed: ${weatherWind}<br/><br/>Time to Destination: ${destinationTime}<br/></div>`
     
     /**
        * Problem
@@ -130,6 +137,11 @@ class AutocompleteDirectionsHandler{
   map;
   originPlaceId;
   destinationPlaceId;
+  waypointPlaceId;
+  waypointArray;
+
+  geometryPoint;
+
   travelMode;
   directionsService;
   directionsRenderer;
@@ -138,6 +150,11 @@ class AutocompleteDirectionsHandler{
     this.map = map;
     this.originPlaceId = "";
     this.destinationPlaceId = "";
+    this.waypointPlaceId = "";
+    this.waypointArray = [];
+
+    this.geometryPoint = "";
+
     this.travelMode = google.maps.TravelMode.DRIVING;
     this.directionsService = new google.maps.DirectionsService();
     this.directionsRenderer = new google.maps.DirectionsRenderer();
@@ -146,55 +163,84 @@ class AutocompleteDirectionsHandler{
     //Get's the data from the two searchboxes
     const originInput = document.getElementById("origin-input");
     const destinationInput = document.getElementById("destination-input");
+    const waypointInput = document.getElementById("waypoint-input");
 
     //Implements autocomplete functionality using the data from both searchboxes
     const originAutoComplete = new google.maps.places.Autocomplete(
       originInput,
       { fields: ["place_id", "geometry"]}
     );
-
+    
     const destinationAutoComplete = new google.maps.places.Autocomplete(
       destinationInput,
+      { fields: ["place_id", "geometry"]}
+    );
+
+    const waypointAutoComplete = new google.maps.places.Autocomplete(
+      waypointInput,
       { fields: ["place_id", "geometry"]}
     );
 
     //Calls the method which is used to calculate the directions from the two locations
     this.routeCalc(originAutoComplete, "ORIG");
     this.routeCalc(destinationAutoComplete, "DEST");
+    this.routeCalc(waypointAutoComplete, "WAY");
 
+     //Waypoint clearer
+
+     //Not too intuitive but get's the job dumb.
+     const clearWaypoints = document.createElement("button");
+     clearWaypoints.textContent = "Clear Waypoints";
+     clearWaypoints.addEventListener("click", () => {
+        this.waypointArray = [];
+     });
+     this.map.controls[google.maps.ControlPosition.BOTTOM_RIGHT].push(clearWaypoints);
+
+    
     //Set's the position of the two searchboxes on the map
     this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
     this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(destinationInput);
-
+    this.map.controls[google.maps.ControlPosition.BOTTOM_RIGHT].push(waypointInput);
   }
   routeCalc(autocomplete, mode) {
     autocomplete.bindTo("bounds", this.map);
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
-
+      console.log(place);
       if (!place.place_id) {
         return;
       }
 
       if (mode === "ORIG") {
         this.originPlaceId = place.place_id;
-      } else {
+      } else if (mode == "DEST"){
         //If data isn't from the origin searchbox then get the destination place ID as well as the destinationGeometry
         this.destinationPlaceId = place.place_id;
 
         //Destination Geometry used to get the lat/long coords to call WeatherAPI
-        const destinationGeometry = place.geometry;
-        getWeatherData(this.map,destinationGeometry)
+         this.geometryPoint = place.geometry;
         
       }
-      this.route();
-    });
+      else{
+        this.waypointPlaceId = place.place_id;
+
+        this.geometryPoint = place.geometry;
+        
+        this.waypointArray.push({
+          location: {placeId: this.waypointPlaceId},
+          stopover: true,
+        })
+      }
+        this.route();
+    }
+    );
   }
   //Route calculation
   route() {
-    if (!this.originPlaceId || !this.destinationPlaceId){
+    if (!this.originPlaceId || !this.destinationPlaceId || !this.waypointArray){
       return;
     }
+    
 
     const me = this;
 
@@ -202,16 +248,38 @@ class AutocompleteDirectionsHandler{
       {
         origin: {placeId: this.originPlaceId},
         destination: {placeId: this.destinationPlaceId},
+        waypoints: this.waypointArray,
+        optimizeWaypoints: true,
         travelMode: "DRIVING",
       },
       (response, status) => {
         if (status === "OK") {
           me.directionsRenderer.setDirections(response);
+          
+
+          const legDuration = response.routes[0];
+
+          //Keep looping until the waypoint has found the matching name via PlaceId info.
+          //When found keep adding the time until you reach that index leg.
+
+          const legDestDuration = this.timeCalc(legDuration);
+          getWeatherData(this.map,this.geometryPoint,legDestDuration)
+
         } else {
           window.alert("Directions request failed due to " + status);
         }
       }
     )
+  }
+  //Calculate legDestDuration the unix time taken to get to any leg of the journey.
+  timeCalc(legDuration){
+          let unixTime = Date.now();
+          unixTime = Math.round(unixTime/1000);
+
+          unixTime += legDuration.legs[0].duration.value;
+           
+          
+          return unixTime;
   }
 }
 
