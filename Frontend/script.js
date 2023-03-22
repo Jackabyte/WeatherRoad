@@ -173,13 +173,15 @@ class AutocompleteDirectionsHandler{
     
     const destinationAutoComplete = new google.maps.places.Autocomplete(
       destinationInput,
-      { fields: ["place_id", "geometry"]}
+      { fields: ["place_id", "geometry", "formatted_address"]}
     );
 
     const waypointAutoComplete = new google.maps.places.Autocomplete(
       waypointInput,
-      { fields: ["place_id", "geometry"]}
+      { fields: ["place_id", "geometry", "formatted_address"]}
     );
+
+    
 
     //Calls the method which is used to calculate the directions from the two locations
     this.routeCalc(originAutoComplete, "ORIG");
@@ -206,7 +208,7 @@ class AutocompleteDirectionsHandler{
     autocomplete.bindTo("bounds", this.map);
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
-      console.log(place);
+      
       if (!place.place_id) {
         return;
       }
@@ -219,12 +221,15 @@ class AutocompleteDirectionsHandler{
 
         //Destination Geometry used to get the lat/long coords to call WeatherAPI
          this.geometryPoint = place.geometry;
+         this.addressPoint = place.formatted_address;
+         
         
       }
       else{
         this.waypointPlaceId = place.place_id;
 
         this.geometryPoint = place.geometry;
+        this.addressPoint = place.formatted_address;
         
         this.waypointArray.push({
           location: {placeId: this.waypointPlaceId},
@@ -240,6 +245,8 @@ class AutocompleteDirectionsHandler{
     if (!this.originPlaceId || !this.destinationPlaceId || !this.waypointArray){
       return;
     }
+
+    
     
 
     const me = this;
@@ -255,15 +262,16 @@ class AutocompleteDirectionsHandler{
       (response, status) => {
         if (status === "OK") {
           me.directionsRenderer.setDirections(response);
-          
+
+          me.directionsRenderer.setPanel(document.getElementById("sidebar"));
 
           const legDuration = response.routes[0];
+          
+          const legDestDuration = this.timeCalc(legDuration, this.addressPoint);
 
-          //Keep looping until the waypoint has found the matching name via PlaceId info.
-          //When found keep adding the time until you reach that index leg.
-
-          const legDestDuration = this.timeCalc(legDuration);
-          getWeatherData(this.map,this.geometryPoint,legDestDuration)
+          //Store each geometry waypoint into an array
+          //Get the weather data for each waypoint per getWeatherData call.
+          getWeatherData(this.map,this.geometryPoint,legDestDuration);
 
         } else {
           window.alert("Directions request failed due to " + status);
@@ -272,13 +280,22 @@ class AutocompleteDirectionsHandler{
     )
   }
   //Calculate legDestDuration the unix time taken to get to any leg of the journey.
-  timeCalc(legDuration){
+  timeCalc(legDuration, addressPoint){
           let unixTime = Date.now();
           unixTime = Math.round(unixTime/1000);
+          let travelTime = 0;
 
-          unixTime += legDuration.legs[0].duration.value;
-           
-          
+
+          for(let i = 0; i <= legDuration.legs.length; i++){
+            if(addressPoint !== legDuration.legs[i].end_address){
+               travelTime += legDuration.legs[i].duration.value;
+            }
+            else{
+              travelTime += legDuration.legs[i].duration.value;
+              break;
+            }
+          }
+          unixTime += travelTime;
           return unixTime;
   }
 }
