@@ -74,7 +74,7 @@ handleLocationError(false, infoWindow, map.getCenter());
  }
 
 //Function to get the weather data of your current location
-function getWeatherData(map, locID, legDestDuration, WeatherArray){
+function getWeatherData(map, locID, legDestDuration, WeatherArray, service){
      
 const API_KEY = '21917a0e0803572232357c75d94699c0';
 
@@ -85,6 +85,8 @@ const API_KEY = '21917a0e0803572232357c75d94699c0';
    
  .then(res => res.json())
  .then(data => {
+  console.log(data);
+  
    let minDifference = [];
      for(let i = 0; i < data.list.length; i++){
        minDifference.push(data.list[i].dt - legDestDuration);
@@ -103,12 +105,51 @@ const API_KEY = '21917a0e0803572232357c75d94699c0';
      for(let i = 0; i < markers.length; i++){
       markers[i].setMap(map);
      }
-     //weatherIcon(map, data.list[minIndex], locID);
+     
+     weatherRadius(map, locID, service)
 
  })
  .catch(err => console.log('err', err))
 
 }
+function weatherRadius(map, locID, service){
+  
+  let Map = map;
+  var request = {
+    location: locID.location,
+    radius: '500',
+    type: ['restaurant']
+  };
+
+  service.nearbySearch(request, (results, status) => {
+    if (status == google.maps.places.PlacesServiceStatus.OK) {
+      for (var i = 0; i < results.length; i++) {
+        createMarker(results[i], Map);
+      }
+    }
+  });
+}
+
+function createMarker(place, map) {
+  if (!place.geometry || !place.geometry.location) return;
+
+  let infowindow;
+  infowindow = new google.maps.InfoWindow();
+  const marker = new google.maps.Marker({
+    map: map,
+    position: place.geometry.location,
+  });
+
+  google.maps.event.addListener(marker, "click", () => {
+    infowindow.setContent(place.name || "");
+    infowindow.open({
+      anchor: marker,
+      map: map,
+    });
+  });
+}
+
+
 //Function used to display the weather data present
 function showWeatherData(data,locID, WeatherArray, map, cityName){
  let WeatherInfo = data.weather[0];
@@ -147,7 +188,7 @@ function showWeatherData(data,locID, WeatherArray, map, cityName){
  marker.addListener("click", () => {
   WeatherInfoWindow.open({
     anchor: marker,
-    map,
+    map: map,
   });
 });
 
@@ -155,20 +196,6 @@ function showWeatherData(data,locID, WeatherArray, map, cityName){
  //WeatherArray.push(WeatherInfoWindow);
  return WeatherArray;
 }
-
-function weatherIcon(map, data, locID){
-  let WeatherInfo = data.weather[0];
-  let WeatherIcon = `https://openweathermap.org/img/wn/${WeatherInfo.icon}@2x.png`
-
-  const marker = new google.maps.Marker({
-    position: locID.location,
-    icon: WeatherIcon,
-    map: map,
-  });
-
-  marker.setMap(map);
-}
-
 
  //Class used to autocomplete search results and use them for directions
 class AutocompleteDirectionsHandler{
@@ -189,6 +216,8 @@ directionsRenderer;
 
 WeatherInfoWindowArr;
 WeatherIconArr;
+
+service;
 
 constructor(map) {
  //Set up directions service
@@ -211,11 +240,13 @@ constructor(map) {
  this.WeatherInfoWindowArr = [];
  this.WeatherIconArr = [];
 
+ this.service = "";
 
  this.travelMode = google.maps.TravelMode.DRIVING;
  this.directionsService = new google.maps.DirectionsService();
  this.directionsRenderer = new google.maps.DirectionsRenderer();
  this.directionsRenderer.setMap(map);
+ this.service = new google.maps.places.PlacesService(map);
 
  //Get's the data from the two searchboxes
  const originInput = document.getElementById("origin-input");
@@ -263,10 +294,11 @@ constructor(map) {
  this.map.controls[google.maps.ControlPosition.BOTTOM_RIGHT].push(waypointInput);
 }
 routeCalc(autocomplete, mode) {
+  
  autocomplete.bindTo("bounds", this.map);
  autocomplete.addListener("place_changed", () => {
    const place = autocomplete.getPlace();
-   
+
    if (!place.place_id) {
      return;
    }
@@ -281,7 +313,7 @@ routeCalc(autocomplete, mode) {
      //Destination Geometry used to get the lat/long coords to call WeatherAPI
       this.DestGeometryPoint = place.geometry;
       this.DestAddressPoint = place.formatted_address;
-     
+
    }
    else{
      this.waypointPlaceId = place.place_id;
@@ -311,6 +343,9 @@ route() {
  }
  const me = this;
 
+
+ 
+
  this.directionsService.route(
    {
      origin: {placeId: this.originPlaceId},
@@ -321,17 +356,11 @@ route() {
    },
    (response, status) => {
      if (status === "OK") {
+
+
        me.directionsRenderer.setDirections(response);
 
        console.log(response);
-
-
-       //const pl = response.routes[0].overview_polyline;
-
-       //var polyline = require( 'google-polyline' );
-
-       //polyline.decode(pl);
-
        me.directionsRenderer.setPanel(document.getElementById("sidebar"));
 
 
@@ -348,10 +377,10 @@ route() {
          const wayOrder = legDuration.waypoint_order;
 
          const legDestDuration = this.timeCalc(legDuration, this.addressArray[wayOrder[i]]);
-         getWeatherData(this.map,this.geoArray[wayOrder[i]],legDestDuration,this.WeatherIconArr);
+         getWeatherData(this.map,this.geoArray[wayOrder[i]],legDestDuration,this.WeatherIconArr, this.service);
        }
        const legDestDuration1 = this.timeCalc(legDuration, this.DestAddressPoint);
-       getWeatherData(this.map,this.DestGeometryPoint,legDestDuration1,this.WeatherIconArr);
+       getWeatherData(this.map,this.DestGeometryPoint,legDestDuration1,this.WeatherIconArr, this.service);
 
 
 
@@ -364,7 +393,13 @@ route() {
 }
 //Calculate legDestDuration the unix time taken to get to any leg of the journey.
 timeCalc(legDuration, addressPoint){
-       let unixTime = Date.now();
+
+  //Conversion of unixTime to the current timezone of the user. EX: UTC to Irish Standard Time.
+        const d = new Date(); 
+        const localTime = d.getTime();
+        const localOffset = d.getTimezoneOffset() * 60 * 1000;
+        let unixTime = localTime - localOffset;
+
        unixTime = Math.round(unixTime/1000);
        let travelTime = 0;
 
