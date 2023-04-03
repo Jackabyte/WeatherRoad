@@ -8,6 +8,7 @@ async function initMap(){
        zoom:15,
        center:{lat:position.coords.latitude,lng:position.coords.longitude},
        mapTypeId: "roadmap",
+       disableDefaultUI: true,
      }
      
      //Creating the map using the definied options from above
@@ -22,41 +23,7 @@ async function initMap(){
      //Creating a popup info window
      infoWindow = new google.maps.InfoWindow();
   
-     //Creates a button, positions it in the top center
-     const locationButton = document.createElement("button");
-     locationButton.textContent = "Pan to Current Location";
-  
-     //When button is pushed execute the following code, which get's the current cordinates
-     locationButton.addEventListener("click", () => {
-       //Check if geolocation is possible on user's browser
-       if (navigator.geolocation) {
-         //USe "watchPosition" to continuosuly track the location
-         //get's the current location of the user
-         navigator.geolocation.getCurrentPosition(
-           (position) => {
-             const pos = {
-               lat: position.coords.latitude,
-               lng: position.coords.longitude,
-             };
-             
-             //Creates a new infowindow where the user's current location is.
-             infoWindow.setPosition(pos);
-             infoWindow.setContent("Location found.");
-             infoWindow.open(map);
-  
-             //Adjusts the map so the center is now at the user's current location.
-             map.setCenter(pos);
-           },
-           () => {
-             //Error handler to see if the Geolocation service has failed due to unknown reasons
-             handleLocationError(true, infoWindow, map.getCenter());
-           }
-         );
-       } else {
-         // Browser doesn't support Geolocation
-         handleLocationError(false, infoWindow, map.getCenter());
-       }
-     });
+     
      
      
      new AutocompleteDirectionsHandler(map);
@@ -176,12 +143,16 @@ async function initMap(){
     let infowindow;
     infowindow = new google.maps.InfoWindow();
 
+    let resizeIcon = {
+      url: place.icon,
+      scaledSize: new google.maps.Size(50, 50),
+     }
   
     
     const marker = new google.maps.Marker({
       map: map,
       position: place.geometry.location,
-      icon: place.icon,
+      icon: resizeIcon,
     });
     MarkerArray.push(marker);
 
@@ -236,7 +207,17 @@ async function initMap(){
   
    let weatherTemp = data.main.temp;
    let weatherWind = data.wind.speed;
-   let destinationTime = data.dt_txt;
+
+   var windDeg = [0,45,90,135,180,225,270,315,360];
+   var windDirectionsArr = ["North", "North-East", "East", "South-East", "South", "South-West", "West", "North West", "North"];
+   var goal = data.wind.deg;
+   const closest = windDeg.reduce(function(prev, curr) {
+    return (Math.abs(curr - goal) < Math.abs(prev - goal) ? curr : prev);
+  });
+
+  var windDirections = windDirectionsArr[windDeg.indexOf(closest)];
+
+   
   
    //The Weather data of the current location including the description, temperture and windspeed.
    const weatherData = 
@@ -245,8 +226,8 @@ async function initMap(){
    '</div>' +
    
    "<div style='float:right; padding: 10px;'>" +
-   "<b>"+ cityName +"</b><br/>" +
-   `${WeatherInfo.description}<br/><br/>Current Temperture: ${weatherTemp}<br/><br/>Wind Speed: ${weatherWind}<br/><br/>Time to Destination: ${destinationTime}<br/></div>`
+   "<b>"+ cityName +"</b><br/>" + "Upon arriving at the destination, the weather will be </br></br>" +
+   `Weather type: ${WeatherInfo.description}<br/><br/>Temperture: ${weatherTemp}°C<br/><br/>${windDirections}ern speed at ${weatherWind} metres/second.<br/></div>`
     
    
    //New infoWindow created with weatherData, map cordinates and a label.
@@ -257,10 +238,15 @@ async function initMap(){
    })
   
    let WeatherIcon = `https://openweathermap.org/img/wn/${WeatherInfo.icon}@2x.png`
+   
+   let resizeIcon = {
+    url: WeatherIcon,
+    scaledSize: new google.maps.Size(200, 200),
+   }
   
    const marker = new google.maps.Marker({
      position: locID.location,
-     icon: WeatherIcon,
+     icon: resizeIcon,
      map: map,
    });
   
@@ -299,6 +285,8 @@ async function initMap(){
   service;
 
   placeIconArray;
+
+  locationButton;
   
   constructor(map) {
 
@@ -328,6 +316,8 @@ async function initMap(){
    this.service = "";
 
    this.placeIconArray = [];
+
+   this.locationButton = "";
   
    this.travelMode = google.maps.TravelMode.DRIVING;
    this.directionsService = new google.maps.DirectionsService();
@@ -339,9 +329,68 @@ async function initMap(){
    const originInput = document.getElementById("origin-input");
    const destinationInput = document.getElementById("destination-input");
    const waypointInput = document.getElementById("waypoint-input");
+
+    //Creates a button, positions it in the top center
+    this.locationButton = document.createElement("button");
+    this.locationButton.textContent = "Pan to Current Location";
+    this.map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(this.locationButton);
+
+    var originAutoComplete;
+
+    
+     const geocoder = new google.maps.Geocoder();
+
+     //When button is pushed execute the following code, which get's the current cordinates
+     this.locationButton.addEventListener("click", () => {
+       //Check if geolocation is possible on user's browser
+       if (navigator.geolocation) {
+         //USe "watchPosition" to continuosuly track the location
+         //get's the current location of the user
+         navigator.geolocation.getCurrentPosition(
+           (position) => {
+            console.log(position);
+             const pos = {
+               lat: position.coords.latitude,
+               lng: position.coords.longitude,
+             };
+
+             geocoder.geocode({ location: pos})
+             .then((response) => {
+              if (response.results[0]){
+                console.log(response.results[0]);
+                this.originPlaceId = response.results[0].place_id;
+
+                var getOrigin = document.getElementById("origin-input");
+                getOrigin.value = response.results[0].formatted_address;
+                getOrigin.innerHTML = response.results[0].formatted_address;
+               
+                 originAutoComplete = new google.maps.places.Autocomplete(
+                  getOrigin,
+                  { fields: ["place_id", "geometry"]}
+                );
+                this.routeCalc(originAutoComplete, "ORIG");
+                   
+                   
+              }
+             })
+           },
+           () => {
+             //Error handler to see if the Geolocation service has failed due to unknown reasons
+             handleLocationError(true, infoWindow, map.getCenter());
+           }
+         );
+       } else {
+         // Browser doesn't support Geolocation
+         handleLocationError(false, infoWindow, map.getCenter());
+       }
+     });
+
+  
+
+  
   
    //Implements autocomplete functionality using the data from both searchboxes
-   const originAutoComplete = new google.maps.places.Autocomplete(
+   originAutoComplete = new google.maps.places.Autocomplete(
      originInput,
      { fields: ["place_id", "geometry"]}
    );
@@ -355,6 +404,17 @@ async function initMap(){
      waypointInput,
      { fields: ["place_id", "geometry", "formatted_address"]}
    );
+
+    //Not too intuitive but get's the job dumb.
+    const clearWaypoints = document.createElement("button");
+    
+    clearWaypoints.textContent = "Clear Waypoints";
+    clearWaypoints.addEventListener("click", () => {
+       this.waypointArray = [];
+       this.geoArray = [];
+       this.addressArray = [];
+       alert("Waypoints Cleared");
+    });
   
   
    //Calls the method which is used to calculate the directions from the two locations
@@ -364,21 +424,30 @@ async function initMap(){
   
     //Waypoint clearer
   
-    //Not too intuitive but get's the job dumb.
-    const clearWaypoints = document.createElement("button");
-    clearWaypoints.textContent = "Clear Waypoints";
-    clearWaypoints.addEventListener("click", () => {
-       this.waypointArray = [];
-       this.geoArray = [];
-       this.addressArray = [];
-    });
-    this.map.controls[google.maps.ControlPosition.BOTTOM_RIGHT].push(clearWaypoints);
-  
    
-   //Set's the position of the two searchboxes on the map
-   this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
-   this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(destinationInput);
-   this.map.controls[google.maps.ControlPosition.BOTTOM_RIGHT].push(waypointInput);
+
+    
+
+   
+      if (window.innerWidth < 500) {
+        this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
+        this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(destinationInput);
+        this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(waypointInput);
+        this.map.controls[google.maps.ControlPosition.RIGHT_TOP].push(clearWaypoints); 
+            
+      }
+     else {
+      this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
+      this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(destinationInput);
+      this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(waypointInput);
+      this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(clearWaypoints);  
+      
+      
+     }
+    
+   
+   
+
   }
   routeCalc(autocomplete, mode) {
     
@@ -392,6 +461,8 @@ async function initMap(){
   
      if (mode === "ORIG") {
        this.originPlaceId = place.place_id;
+
+    
        
      } else if (mode == "DEST"){
        //If data isn't from the origin searchbox then get the destination place ID as well as the destinationGeometry
