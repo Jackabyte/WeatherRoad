@@ -1,22 +1,25 @@
 #map{
   height:100%;
-  width:80%;
+  width:100%;
+  position: fixed;
 }
 
-@media screen and (max-width: 500px){
-  #container{
-    display: flex;
-    flex-direction:column;
-  }
-  #map{
-    height:100%;
-    width:100%;
-  }
-  #input{
-    touch-action: none;
-  }
+.input-container{
+  display: flex;
+  flex-direction: column;
 }
 
+.controls{
+  width: 25%;
+  padding: 12px 5px;
+  margin: 8px 10px;
+  box-sizing: border-box;
+}
+
+.butt{
+  margin: 10px;
+  border-radius: 5px;
+}
 body {
   background-color: lightblue;
 }
@@ -24,6 +27,18 @@ body {
 #container {
   height: 100%;
   display: flex;
+}
+
+#floating-select-panel{
+  position: absolute;
+  background-color: #fff;
+  padding: 5px;
+  margin-left: 10px;
+  border: 1px solid #999;
+  text-align: center;
+  font-family: "Roboto", "sans-serif";
+  line-height: 30px;
+  padding-left: 10px;
 }
 
 #sidebar {
@@ -34,4 +49,50 @@ body {
   height: 100%;
   box-sizing: border-box;
   overflow: auto;
+}
+
+#sidebar {
+  flex: 0 1 auto;
+  padding: 0;
+}
+
+@media screen and (max-width: 500px){
+
+  html, body 
+  {margin: 0;
+   height: 100%; 
+   overflow: hidden}
+
+  #container{
+    display: flex;
+    flex-direction:column;
+  }
+  #map{
+    height:100%;
+    width:100%;
+    
+  }
+  .controls{
+    width: 45%;
+    padding: 12px 5px;
+    margin: 8px 10px;
+    box-sizing: border-box;
+    touch-action: none;
+  }
+  
+  .butt{
+    margin: 5px;
+    border-radius: 5px;
+  }
+
+  #sidebar {
+    flex-basis: 15rem;
+    flex-grow: 1;
+    padding: 1rem;
+    max-width: 30rem;
+    height: 100%;
+    box-sizing: border-box;
+    overflow: auto;
+  }
+
 }

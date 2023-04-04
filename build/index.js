@@ -90,40 +90,62 @@ async function initMap(){
     const snowSuggestions = ["skiing"]
     const rainSuggestions = [ "Museum", "Restaraunt", "Library", "Castle"];
 
-    if(data.weather[0].main.includes("Rain")){
+    const userPlaces = [];
+    const userInput = document.getElementById("placeTypes");
+    console.log(userInput);
+
+    for (let i = 0; i < userInput.length; i++) {
+      if (userInput.options[i].selected) {
+        userPlaces.push(userInput[i].value);   
+      }
+    }
+
+    if(userPlaces.length !== 0 ){
+      selectedArr = userPlaces;
+    }
+    else if(data.weather[0].main.includes("Rain")){
      selectedArr = rainSuggestions;
     }
     else if(data.main.temp > 20 && !data.weather[0].main.includes("Rain")){
       selectedArr = hotSuggestions;
      }
-     else if(data.weather[0].main.includes("Sunny")){
+     else if(data.weather[0].main.includes("clear")){
       selectedArr = sunnySuggestions;
      }
      else if(data.weather[0].main.includes("Snow")){
       selectedArr = snowSuggestions;
      }
-     else{
-      selectedArr = ["Restaraunt"];
-     }
      
      
-    
+    console.log(locID);
     //Get multiple input box to select multiple values which will be used as a type of array.
   
     //Have two arrays for activites for sunny and rainy weather. but also include the keyword function so the user can search for locations they want.
   
     //Create an array keyword requests then do a nearby search for all of them.
     let Map = map;
-  
+     
+    if(selectedArr === userPlaces){
+      for(let i = 0; i < selectedArr.length; i++){
+        var request = {
+          location: locID.location,
+          radius: '750',
+          type: selectedArr[i],
+        };
+        requestArr.push(request);
+        }
+    }
+    else{
     for(let i = 0; i < selectedArr.length; i++){
     var request = {
       location: locID.location,
-      radius: '500',
+      radius: '750',
       keyword: selectedArr[i],
     };
     requestArr.push(request);
     }
-    
+  }
+
     for(let i = 0; i < requestArr.length; i++){
     service.nearbySearch(requestArr[i], (results, status) => {
       if (status == google.maps.places.PlacesServiceStatus.OK) {
@@ -135,7 +157,7 @@ async function initMap(){
     });
   }
   
-  
+
   }
   
   function createMarker(place, map, MarkerArray) {
@@ -166,29 +188,43 @@ async function initMap(){
 
       if(place.photos){
       photoData = place.photos[0];
-      photoData.height = 200;
-      photoData.width = 250;
 
-      var PhotoUrl =  photoData.getUrl();
-      photo = "<div style='float:left'>" +
-      `<img src = "${PhotoUrl}">` +
-      '</div>'
-
+      if(photoData.height > photoData.width){
+        photoData.height = 250;
+        photoData.width = 150;
       }
-
+      else if (photoData.height < photoData.width){
+        photoData.height = 150;
+        photoData.width = 250;
+      }
+      else{
+        photoData.height = 200;
+        photoData.width = 200;
+      }
+      
+      var PhotoUrl =  photoData.getUrl();
+      photo = "<div style='float:left padding: 20px;'>" +
+      `<img src = "${PhotoUrl}"
+        width=${photoData.width}
+        height=${photoData.height}/>` +
+      '</div>'
+    }
+      
+      const placeVacinity = place.vicinity;
       const placeName = place.name;
+      console.log(placeName);
       var placeRating;
       if(place.rating !== 0){
         placeRating = place.rating + "/5";
       }
       else{
-        placeRating = "Place unaviable";
+        placeRating = "Rating unavailable";
       }
 
       const placeData = photo +
-      "<div style='float:right; padding: 10px;'>" +
-      "<b>"+ placeName +"</b><br/>" +
-      `Rating: ${placeRating}<br/><br/>`
+      "<div style='float:right; margin:10px'>" +
+      "<b>"+ placeName +"</b><br/><br/>" + "</br>" + placeVacinity + "</br></br>" +
+      `Rating: ${placeRating}<br/><br/>` + "</div>"
     
 
       infowindow.setContent(placeData);
@@ -318,6 +354,7 @@ async function initMap(){
    this.placeIconArray = [];
 
    this.locationButton = "";
+
   
    this.travelMode = google.maps.TravelMode.DRIVING;
    this.directionsService = new google.maps.DirectionsService();
@@ -330,12 +367,24 @@ async function initMap(){
    const destinationInput = document.getElementById("destination-input");
    const waypointInput = document.getElementById("waypoint-input");
 
-    //Creates a button, positions it in the top center
-    this.locationButton = document.createElement("button");
-    this.locationButton.textContent = "Pan to Current Location";
-    this.map.controls[google.maps.ControlPosition.BOTTOM_LEFT].push(this.locationButton);
+   //Code for a submit button
 
-    var originAutoComplete;
+    const submitButton = document.getElementById("updateRoute");
+    submitButton.textContent = "Update Route";
+    
+    submitButton.addEventListener("click", () => {
+      this.updateCalc();
+    });
+
+  
+
+        
+    //Creates a button, positions it in the top center
+    this.locationButton = document.getElementById("CurrentLocation");
+    this.locationButton.textContent = "Get Current Location";
+    
+
+    const control = document.getElementById("floating-select-panel");
 
     
      const geocoder = new google.maps.Geocoder();
@@ -363,14 +412,7 @@ async function initMap(){
                 var getOrigin = document.getElementById("origin-input");
                 getOrigin.value = response.results[0].formatted_address;
                 getOrigin.innerHTML = response.results[0].formatted_address;
-               
-                 originAutoComplete = new google.maps.places.Autocomplete(
-                  getOrigin,
-                  { fields: ["place_id", "geometry"]}
-                );
-                this.routeCalc(originAutoComplete, "ORIG");
-                   
-                   
+                this.updateCalc();
               }
              })
            },
@@ -390,7 +432,7 @@ async function initMap(){
   
   
    //Implements autocomplete functionality using the data from both searchboxes
-   originAutoComplete = new google.maps.places.Autocomplete(
+   const originAutoComplete = new google.maps.places.Autocomplete(
      originInput,
      { fields: ["place_id", "geometry"]}
    );
@@ -406,14 +448,15 @@ async function initMap(){
    );
 
     //Not too intuitive but get's the job dumb.
-    const clearWaypoints = document.createElement("button");
+    const clearWaypoints = document.getElementById("waypointClear");
     
     clearWaypoints.textContent = "Clear Waypoints";
     clearWaypoints.addEventListener("click", () => {
        this.waypointArray = [];
        this.geoArray = [];
        this.addressArray = [];
-       alert("Waypoints Cleared");
+       //Calls the method which is used to calculate the directions from the two locations
+       this.updateCalc();
     });
   
   
@@ -424,25 +467,23 @@ async function initMap(){
   
     //Waypoint clearer
   
-   
-
-    
-
-   
       if (window.innerWidth < 500) {
         this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
-        this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(destinationInput);
-        this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(waypointInput);
-        this.map.controls[google.maps.ControlPosition.RIGHT_TOP].push(clearWaypoints); 
-            
+        this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(destinationInput);
+        this.map.controls[google.maps.ControlPosition.RIGHT_TOP].push(waypointInput);
+        this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(this.locationButton);
+        this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(submitButton);
+        this.map.controls[google.maps.ControlPosition.LEFT_BOTTOM].push(control);
+        this.map.controls[google.maps.ControlPosition.RIGHT_TOP].push(clearWaypoints);
       }
      else {
       this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(originInput);
-      this.map.controls[google.maps.ControlPosition.TOP_LEFT].push(destinationInput);
+      this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(destinationInput);
       this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(waypointInput);
-      this.map.controls[google.maps.ControlPosition.TOP_RIGHT].push(clearWaypoints);  
-      
-      
+      this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(this.locationButton);
+      this.map.controls[google.maps.ControlPosition.LEFT_TOP].push(submitButton);
+      this.map.controls[google.maps.ControlPosition.LEFT_BOTTOM].push(control);
+      this.map.controls[google.maps.ControlPosition.RIGHT_TOP].push(clearWaypoints);
      }
     
    
@@ -494,16 +535,16 @@ async function initMap(){
    }
    );
   }
+  updateCalc(){
+    this.route();
+  }
   //Route calculation
   route() {
    if (!this.originPlaceId || !this.destinationPlaceId || !this.waypointArray){
      return;
    }
    const me = this;
-  
-  
-   
-  
+
    this.directionsService.route(
      {
        origin: {placeId: this.originPlaceId},

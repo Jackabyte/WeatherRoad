@@ -8,12 +8,13 @@
   <script src="index.js"></script>
   <script async defer type="text/javascript" src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCjmzB7fsk_CtCz4lZdLhyt3j4R6kSZyWI&callback=initMap&libraries=places"></script>
   <link rel="stylesheet" href="Style.css">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 
   
 
 </head>
 <body>
+  <div class = "input-container">
   <input
         id="origin-input"
         class="controls"
@@ -27,20 +28,49 @@
         type="text"
         placeholder="Enter a destination location"
       />
-
-    
- <div id = "container">
-  <div id="map"></div>
-  <div id="sidebar"></div>
-</div>
-
-  <input
+      
+      <input
         id="waypoint-input"
         class="controls"
         type="text"
         onfocus="this.value=''"
         placeholder="Enter a waypoint"
       />
+      <div class = "buttonRow">
+        <button type="button" class="butt" id="updateRoute">Update Route</button>
+        <button type="button" class="butt" id="CurrentLocation">Get Current Location</button>
+        <button type="button" class="butt" id="waypointClear">Clear Waypoints</button>
+      </div>
+    </div>
+
+    
+    
+
+
+
+      <div id="floating-select-panel">
+            <i>(Ctrl+Click for multiple selection/deselection)</i> <br />
+            <select multiple id="placeTypes">
+              <option value="gas_station">Petrol</option> 
+              <option value="restaurant">Restaraunt</option> 
+              <option value="supermarket">Supermarket</option> 
+              <option value="cafe">Cafe</option>
+              <option value="park">Park</option>
+              <option value="bar">Pubs</option> 
+              <option value="campground">Camp Ground</option>
+              <option value="lodging">Hotel</option>
+              <option value="movie_theater">Cinema</option>
+              <option value="museum">Museum</option>
+              <option value="bowling_alley">Bowling Ally</option>
+            </select>
+          </div>
+  
+    
+ <div id = "container">
+  <div id="map"></div>
+  <div id="sidebar"></div>
+</div>
+
   
  
 
